@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.1.32210.238
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "regression", "regression.pyproj", "{820362AA-6E3B-48C9-84F1-802FA8FFF1AD}"
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "MLCoin", "MLCoin.pyproj", "{EF27C34C-5D54-4360-A53C-68C049208A4A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,8 +11,8 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{820362AA-6E3B-48C9-84F1-802FA8FFF1AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{820362AA-6E3B-48C9-84F1-802FA8FFF1AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EF27C34C-5D54-4360-A53C-68C049208A4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EF27C34C-5D54-4360-A53C-68C049208A4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
