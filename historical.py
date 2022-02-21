@@ -5,6 +5,8 @@ import json
 import pandas
 from pandas import read_table
 import time
+import math
+import threading
 from datetime import datetime, timedelta
 import os
 
@@ -21,8 +23,14 @@ TIME_SCALE = '1hr'
 time_lens = {'1min':60, '5min':300, '15min':900, '1hr':3600, '6hr':21600, '1day':86400}
 
 
+result=None
+progress=None
+threadList=[]
+result_available = threading.Event()
+exit_thread = threading.Event()
 
 def connect(url, *args):
+    global result
     try:
         if args is not None:
             response = requests.get(url,args)
@@ -30,15 +38,19 @@ def connect(url, *args):
             response = requests.get(url)
         response.raise_for_status()
         #print('HTTP connection success!')
-        return response
+        #return response
+        result = response
+        result_available.set()
     except HTTPError as http_err:
         print(f'HTTP error occurred: {http_err}')
     except Exception as err:
         print(f'Other error occurred: {err}')
+            
+      
 
-def getData(pair, start, end, resolution):
+def getData(currency, y_path, year):
     #getting historical data from candles not individual trades, that might be a bit much
-    pair_path = PRODUCTS + '/' + pair + '/candles'
+    pair_path = PRODUCTS + '/' + currency + '/candles'
     res = resolution
     #accept either char description or integer, but default to 1hr
     if resolution is not integer:
@@ -50,40 +62,89 @@ def getData(pair, start, end, resolution):
         res = time_lens['1hr']
 
     #loop through provided time range given time resolution
+    global progress = 0
+    global threadList=[]
+    callsPerSecond = 7.0
+    timeToSleep = 1.0/callsPerSecond
 
+    start = datetime.date(year, 1, 1, 0, 0, 0, 0)
+    end = datetime.date(year, 12, 31, 23, 59, 59, 0)
+    if year == datetime.now().year:
+        end = datetime.now()
 
-    params = {'start':start, 'end':end, 'granularity':res}
-    response = connect(pair_path, params)
-    print(response.status_code)
-    return response
+    delta = datetime.timedelta(start, end)
+    deltaSeconds = delta.total_seconds()
+    numCandles = int(math.ceil(deltaSeconds/(1.0*res)))
+    approxCalls = int(math.ceil(numCandles/300.0))
+    s = start
+    e = start + delta
+    while True:
+        
+        params = {'start':s.isoformat(), 'end':e.isoformat(), 'granularity':res}
+        thread = threading.Thread(target=connect, args=(pair_path, params,), daemon=True)
+        threadList.append(thread)
+        thread.start()
+        result_available.wait()
+        if result.status_code == 200:
+            filename = f'{currency}_{year}_{progress}.csv'
 
-def populateYearPath(currency, c_path, year):
-    fileList = os.listdir(c_path + f'\\{i}')
+            df_history = pandas.read_json(result.text)
+            # Add column names in line with the Coinbase Pro documentation
+            df_history.columns = ['time','trade_id','price','size','side']
+            
+            # Index must be set as the date
+            df_history.set_index('time', inplace=True)
+            df_history.to_csv(f'{y_path}\\{filename}')
+
+        else:
+            print(f'skipped sequence {progress} in {currency}_{year} due to bad response')
+
+        progress++
+        progPercent = (progress/approxCalls)*100.0
+        s = s+delta
+        e = e+delta
+        print(f'\r{progPercent}% done...  last response code:{result.status_code}', flush=True)
+        print(f'')
+         if exit_thread.wait(timeout=timeToSleep):
+                break
+
+    #sanity check, clean up any random threads
+    for t in threadList:
+        if t.isAlive():
+            t.terminate()
+    return True
+
+def populateYearPath(currency, y_path, year):
+    fileList = os.listdir(y_path)
     if fileList == []:
-        #super empty
-        response = getData(currency, start, end, TIME_SCALE)
+        if(getData(currency, y_path, year)):
+            print(f'finished loading csv\'s for {currency} {year}')
     else:
-        #see if partially filled, delete lastest (most likely to have an error) and restart from there
-
-        print(f'{currency}, {year}, contains: {fileList}')
+        print(f'{currency}, {year}, contains: {fileList} from previous run. to rerun, remove old files at {y_path}')
     return True
 
 def makeYearPaths(currency, c_path):
     #make folders for each year starting with start year
     end_year = datetime.now().year
     for i in range (start_year, end_year+1):
-        os.mkdir(c_path + f'\\{i}')
+        y_path = c_path + f'\\{i}'
+        os.mkdir(y_path)
         print(f'made {i} path for {currency}')
-        populateYearPath(currency, c_path, i)
+        populateYearPath(currency, y_path, i)
         #get full data for year (or ytd for current year) and save csv(s)
     return True
 
 def populateCurrencyPath(currency, c_path):
-    if os.listdir(c_path) == []:
+    fileList = os.listdir(c_path)
+    if fileList == []:
         #super empty
         makeYearPaths(currency, c_path)
-    else:
-        #check how full the subfolders are
+    else: 
+        #possibly stopped mid DL
+        for i in range (start_year, end_year+1):
+            if not os.path.(c_path + f'\\{i}'):
+                populateYearPath(currency, c_path + f'\\{i}', i)
+         
     return True
 
 def makeCurrencyPath(currency, c_path):
@@ -101,16 +162,7 @@ def populateRootPath():
             #super empty, make the directory and fill it
             makeCurrencyPath(currency, curr_path)
         else:
-            #see if we have any data 
-            print(f'files in {curr_path}: ')
-            print(os.listdir(curr_path))
-            if os.listdir(curr_path) == []:
-                #super empty, make the yearly folders and fill em
-                print(f'get historical data for {currency}')
-            elif CONTINUE_TRAINING:
-                print('see how up to date our data is, fill in new data if wanted')
-            else:
-                print(f'some {currency} historical data is present, no more required at this time, edit start_year & CONTINUE_TRAINING vars if desired')
+            populateCurrencyPath(currency, curr_path)
     return True
 
 def makeRootPath():
@@ -144,38 +196,3 @@ def getHistorical():
     #check for folder structure
     if os.path.isdir(csv_path) == False:
         makeRootPath
-    
-
-def other():
-    start_date = (datetime.today() - timedelta(days=90)).isoformat()
-    end_date = datetime.now().isoformat()
-    # Please refer to the coinbase documentation on the expected parameters
-    params = {'start':start_date, 'end':end_date, 'granularity':'86400'}
-    response = connect(PRODUCTS+'/BTC-USD/candles', param = params)
-    response_text = response.text
-    df_history = pandas.read_json(response_text)
-    # Add column names in line with the Coinbase Pro documentation
-    df_history.columns = ['time','low','high','open','close','volume']
-    
-    # We will add a few more columns just for better readability
-    df_history['date'] = pandas.to_datetime(df_history['time'], unit='s')
-    df_history['year'] = pandas.DatetimeIndex(df_history['date']).year
-    df_history['month'] = pandas.DatetimeIndex(df_history['date']).month
-    df_history['day'] = pandas.DatetimeIndex(df_history['date']).day
-    # Only display the first 5 rows
-    df_history.head(5).drop(['time','date'], axis=1)
-    print(df_history)
-
-    # Make a copy of the original dataframe
-    df_ohlc = df_history
-    # Remove unnecessary columns and only show the last 30 days
-    df_ohlc = df_ohlc.drop(['time','year','month','day'], axis = 1).head(30)
-    # Columns must be in a specific order for the candlestick chart (OHLC)
-    df_ohlc = df_ohlc[['date', 'open', 'high', 'low', 'close','volume']]
-    # Index must be set as the date
-    df_ohlc.set_index('date', inplace=True)
-    # Inverse order is expected so let's reverse the rows in the dataframe
-    df_ohlc = df_ohlc[::-1]
-    df_ohlc.to_csv('csv_data\\ohlc.csv')
-    #mpf.plot(df_ohlc,type='candle',mav=(3,6,9),volume=True)
-
