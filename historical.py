@@ -1,4 +1,5 @@
 from types import NoneType
+from numpy import True_
 from pandas.core.base import NoNewAttributesMixin
 import requests
 from requests import Request, Session
@@ -103,6 +104,7 @@ def getData(currency, y_path, year):
     #print(f'before while: delta:{delta}, start:{s}, end:{end}, #Calls for range:{approxCalls}, #datapoints per call:{numCandles/approxCalls}')
     global result
     while True:
+        #might end early by one frame... work on this edge case
         if s.year > year:
             #finished off the year
             break
@@ -137,19 +139,23 @@ def getData(currency, y_path, year):
                 df_history = pandas.read_json(result.text)
                 #print(df_history.head(5))
                 # Add column names in line with the Coinbase Pro documentation
-                df_history.columns  = ['time','low','high','open','close','volume']
-                #drop all rows outside of desired year
-                df_history = df_history[df_history['time'] > start.timestamp()]
-                df_history = df_history[df_history['time'] < end.timestamp()]
-                #add a user friendly time field, might also help in learning patterns between months
-                if not 'UF_time' in df_history.columns:
-                    df_history['UF_time'] = (pandas.to_datetime(df_history['time'], unit='s'))
-                df_history.set_index('time', inplace=True)
-                df_history.sort_index(inplace=True)
-                df_history.to_csv(finalpath)
+                if not len(df_history.columns) == 0:
+                    df_history.columns  = ['time','low','high','open','close','volume']
+                    #drop all rows outside of desired year
+                    df_history = df_history[df_history['time'] > start.timestamp()]
+                    df_history = df_history[df_history['time'] < end.timestamp()]
+                    #add a user friendly time field, might also help in learning patterns between months
+                    df_history.drop_duplicates(inplace=True)
+                    if not 'UF_time' in df_history.columns:
+                        df_history['UF_time'] = (pandas.to_datetime(df_history['time'], unit='s'))
+                    df_history.set_index('time', inplace=True)
+                    df_history.sort_index(inplace=True)
+                    df_history.to_csv(finalpath)
+                else:
+                    print(f'/rskipped sequence {progress} in {currency}_{year} last response data not as expected or not present')
 
             else:
-                print(f'skipped sequence {progress} in {currency}_{year} last response not 200, instead:{result.response_code}')
+                print(f'/rskipped sequence {progress} in {currency}_{year} last response not 200, instead:{result.response_code}')
          
             dt = (datetime.now()-last_call).total_seconds()
             if  dt < timeToSleep:
@@ -186,10 +192,11 @@ def populateYearPath(currency, y_path, year):
         fileList = os.listdir(y_path)
     if fileList == []:
         if(getData(currency, y_path, year)):
-            print(f'finished loading csv\'s for {currency} {year}')
+            print(f'\rfinished loading csv\'s for {currency} {year}')
     else:
-        pass
-        #print(f'{currency}, {year}, contains: {fileList} from previous run. to rerun, remove old files at {y_path}')
+        print(f'{currency}, {year}, contains: {len(fileList)} files from previous run. attempting to continue')
+        if(getData(currency, y_path, year)):
+            print(f'\rfinished loading csv\'s for {currency} {year}')
     return True
 
 def makeYearPaths(currency, c_path):

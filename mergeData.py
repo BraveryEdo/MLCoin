@@ -10,7 +10,7 @@ csv_path = config.csv_path
 
 '''
 csv data structure:
-root:
+workspace:
 root level: [csv_data_{RESOLUTION}_res]:
     currency folder [BTC-USD]:
         full summry file *if generated*: FULL_[BTC-USD]_{RESOLUTION}.csv
@@ -43,7 +43,10 @@ def addReadableTime():
                                         if os.path.exists(f_path):
                                             df = pandas.read_csv(f_path)
                                             if not 'UF_time' in df.columns:
+                                                df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+                                                df.set_index('time', inplace=True)
                                                 df['UF_time'] = (pandas.to_datetime(df['time'], unit='s'))
+                                                df.drop_duplicates(inplace=True)
                                                 df.to_csv(f_path)
 #also deprecated ... baked into get historical data
 def setIndex():
@@ -69,12 +72,9 @@ def setIndex():
                                             df = pandas.read_csv(f_path)
                                             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
                                             df.set_index('time', inplace=True)
+                                            df.drop_duplicates(inplace=True)
                                             df.sort_index(inplace=True)
                                             df.to_csv(f_path)
-
-
-
-
 
 
 def merger():
@@ -109,16 +109,18 @@ def merger():
                                         yearlydf = pandas.concat(all_files_for_year)
                                         yearlydf = yearlydf.loc[:, ~yearlydf.columns.str.contains('^Unnamed')]
                                         yearlydf.set_index('time', inplace=True)
+                                        yearlydf.drop_duplicates(inplace=True)
                                         yearlydf.sort_index(inplace=True)
-                                        yearlydf.to_csv(yearlyName)
                                         all_years_for_currency.append(yearlydf)
+                                        yearlydf.to_csv(yearlyName)
                                         print(f'\rfinished writing {yearlyName}')
                                     else:
                                          print(f'no files present to merge in {y_path}')
-
+                            print(f'{len(all_years_for_currency)} dataframes in full list')
                             currencydf = pandas.concat(all_years_for_currency)
                             currencydf = df.loc[:, ~df.columns.str.contains('^Unnamed')]
                             currencydf.set_index('time', inplace=True)
+                            currencydf.drop_duplicates(inplace=True)
                             currencydf.sort_index(inplace=True)
                             currencydf.to_csv(full_name)
                             print(f'finished full merge for {full_name}')
