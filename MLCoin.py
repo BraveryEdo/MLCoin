@@ -10,7 +10,7 @@ try:
 except ImportError:
     pass
 
-#historical.getMultRes()
+historical.getMultRes()
 #historical.updateNewest()
 #mergeData.addReadableTime()
 #mergeData.setIndex()

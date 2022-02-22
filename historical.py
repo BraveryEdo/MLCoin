@@ -4,38 +4,45 @@ import requests
 from requests import Request, Session
 from urllib.error import HTTPError
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
-import json
 import pandas
 from pandas import read_table
-import time
 import math
 import threading
+import time
 from datetime import datetime, timedelta
 import os
 from fake_useragent import UserAgent
+import config
 
-from requests.models import PreparedRequest
-CONTINUE_TRAINING = True
 REST_API = 'https://api.pro.coinbase.com'
 PRODUCTS = REST_API+'/products'
-csv_path = 'csv_data'
-start_year = 2016
-# I am only interested in a few currencies that I want to trade, so let's add them here:
-#MY_CURRENCIES = ['BTC-USD','ETH-USD','LTC-USD','DOGE-USD','SHIB-USD','ALGO-USD','MANA-USD','MATIC-USD']
-MY_CURRENCIES = ['BTC-USD']
+csv_path = config.csv_path
+start_year = config.start_year
+MY_CURRENCIES = config.MY_CURRENCIES
+time_lens = config.time_lens
+#default time scale to use unless otherwise (correctly) specified
 TIME_SCALE = '5min'
 
-time_lens = {'1min':60, '5min':300, '15min':900, '1hr':3600, '6hr':21600, '1day':86400}
 ua = UserAgent()
 #print(ua.chrome)
 header = {'User-Agent':str(ua.chrome)}
-
 
 result=None
 progress=None
 threadList=[]
 result_available = threading.Event()
-exit_thread = threading.Event()
+
+'''
+csv data structure:
+root:
+root level: [csv_data_{RESOLUTION}_res]:
+    currency folder [BTC-USD]:
+        full summry file *if generated*: FULL_[BTC-USD]_{RESOLUTION}.csv
+        year folder [2020]:
+            data: [BTC-USD]_{YEAR}_{sequence}.csv
+            yearly data summary file *if generated*: {YEAR}_[BTC-USD]_{RESOLUTION}.csv
+'''
+
 
 def connect(url, args):
     #print(f'trying {url}, {args}')
@@ -78,10 +85,15 @@ def getData(currency, y_path, year):
         end = datetime.now()
     
     candlesPerCall = 256.0 #if you change this then subsequent runs might skip current data for this year consider deleting YTD data
-    delta = end - start
-    deltaSeconds = delta.total_seconds()
+    #timedelta obj which is equal to the ammount of time between 1st and last day of the year
+    yeardelta = end - start
+    #FIVE HUNDRED TWENTYFIVE THOUSAND SIX HUNDRED MINUTESSSSS *x60
+    deltaSeconds = yeardelta.total_seconds()
+    #how many data points should this pull for the year
     numCandles = math.ceil(deltaSeconds/res)
+    #only approximate because coinbase api might give back data slightly outside of the specified range ::shrugs::
     approxCalls = int(math.ceil(numCandles/candlesPerCall))
+    #seconds between endpoints to get the correct number of candles (below a threshold)
     delta = timedelta(seconds=math.ceil(deltaSeconds/approxCalls))
     s = start
     e = start + delta
@@ -91,8 +103,14 @@ def getData(currency, y_path, year):
     #print(f'before while: delta:{delta}, start:{s}, end:{end}, #Calls for range:{approxCalls}, #datapoints per call:{numCandles/approxCalls}')
     global result
     while True:
+        if s.year > year:
+            #finished off the year
+            break
+        if e.year > year or e > end:
+            #set e to end of year
+            break
+
         #print(f'start,end was: {start},{end}, using get with {s},{e}')
-        
         filename = f'{currency}_{year}_{progress}.csv'
         finalpath = f'{y_path}\\{filename}'
         if not os.path.exists(finalpath):
@@ -120,16 +138,18 @@ def getData(currency, y_path, year):
                 #print(df_history.head(5))
                 # Add column names in line with the Coinbase Pro documentation
                 df_history.columns  = ['time','low','high','open','close','volume']
+                #drop all rows outside of desired year
+                df_history = df_history[df_history['time'] > start.timestamp()]
+                df_history = df_history[df_history['time'] < end.timestamp()]
                 #add a user friendly time field, might also help in learning patterns between months
                 if not 'UF_time' in df_history.columns:
                     df_history['UF_time'] = (pandas.to_datetime(df_history['time'], unit='s'))
                 df_history.set_index('time', inplace=True)
-                df_history.sort_index()
+                df_history.sort_index(inplace=True)
                 df_history.to_csv(finalpath)
 
             else:
-                print(f'skipped sequence {progress} in {currency}_{year} due to bad response')
-
+                print(f'skipped sequence {progress} in {currency}_{year} last response not 200, instead:{result.response_code}')
          
             dt = (datetime.now()-last_call).total_seconds()
             if  dt < timeToSleep:
@@ -149,14 +169,14 @@ def getData(currency, y_path, year):
         e = e+delta
         twodecimal = "{:.2f}".format(progPercent)
         print(f'\r{currency} {year} in {TIME_SCALE} res is {twodecimal}% done...', end= '', flush=True)
-        if result.response_code == 200:
-            pass
-        else:
-            print(f'      last response not 200, instead:{result.response_code}')
         
-
-        if not (progress < approxCalls and datetime.now()-e > timedelta(seconds=(time_lens[TIME_SCALE]*2))):
-            break
+        
+        '''
+        #might actually skip some data at the end of each year, needs some fine tuning
+        #if not (progress < approxCalls and datetime.now()-e > timedelta(seconds=(time_lens[TIME_SCALE]*2))):
+        #    break
+        '''
+            
     return True
 
 def populateYearPath(currency, y_path, year):
@@ -252,9 +272,13 @@ def getHistorical():
 def getMultRes():
     for v in time_lens:
         path = f'{csv_path}_{v}_res'
+        global TIME_SCALE
         TIME_SCALE = v
         if os.path.isdir(path) == False:
             makeRootPath(path)
         else:
             populateRootPath(path)
+    return True
+
+def updateData():
     return True

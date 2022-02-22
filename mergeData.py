@@ -2,15 +2,28 @@ import pandas
 import time
 import datetime
 import os
+import config
 
 
-time_lens = {'1min':60, '5min':300, '15min':900, '1hr':3600, '6hr':21600, '1day':86400}
+time_lens = config.time_lens
+csv_path = config.csv_path
+
+'''
+csv data structure:
+root:
+root level: [csv_data_{RESOLUTION}_res]:
+    currency folder [BTC-USD]:
+        full summry file *if generated*: FULL_[BTC-USD]_{RESOLUTION}.csv
+        year folder [2020]:
+            data: [BTC-USD]_{YEAR}_{sequence}.csv
+            yearly data summary file *if generated*: {YEAR}_[BTC-USD]_{RESOLUTION}.csv
+'''
 
 #deprecated cuz its now included in get historical data
 def addReadableTime():
 
     for t in time_lens:
-        path = f'csv_data_{t}_res'
+        path = f'{csv_path}_{t}_res'
         #print(path)
         if os.path.isdir(path):
             if not os.listdir(path) == []:
@@ -32,10 +45,10 @@ def addReadableTime():
                                             if not 'UF_time' in df.columns:
                                                 df['UF_time'] = (pandas.to_datetime(df['time'], unit='s'))
                                                 df.to_csv(f_path)
-#also deprecated for same reason as above 
+#also deprecated ... baked into get historical data
 def setIndex():
     for t in time_lens:
-        path = f'csv_data_{t}_res'
+        path = f'{csv_path}_{t}_res'
         #print(path)
         if os.path.isdir(path):
             if not os.listdir(path) == []:
@@ -56,7 +69,7 @@ def setIndex():
                                             df = pandas.read_csv(f_path)
                                             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
                                             df.set_index('time', inplace=True)
-                                            df.sort_index()
+                                            df.sort_index(inplace=True)
                                             df.to_csv(f_path)
 
 
@@ -66,45 +79,55 @@ def setIndex():
 
 def merger():
     for t in time_lens:
-        path = f'csv_data_{t}_res'
-        #print(path)
+        path = f'{csv_path}_{t}_res'
+        print(path)
         if os.path.isdir(path):
             if not os.listdir(path) == []:
                 for c in os.listdir(path):
                     currency_path = f'{path}\\{c}'
-                    #print(currency_path)
-                    currencydf = pandas.DataFrame({})
+                    print(currency_path)
+                    full_name = f'{currency_path}\\FULL_{c}_{t}.csv'
+                    all_years_for_currency = []
                     if os.path.isdir(currency_path):
                         if not os.listdir(currency_path) == []:
                             for y in os.listdir(currency_path):
                                 y_path = f'{currency_path}\\{y}'
-                                #print(y_path)
-                                yearlydf = pandas.DataFrame({})
-                                if not os.listdir(y_path) == []:
-                                    for f in os.listdir(y_path):
-                                        #print(f)
-                                        f_path = f'{y_path}\\{f}'
-                                        df = pandas.read_csv(f_path)
-                                        
-                                        if yearlydf.empty:
-                                            yearlydf = df
-                                        else:
-                                            yearlydf = pandas.concat([yearlydf, df])
+                                print(y_path)
+                                if (not full_name == y_path) and (os.path.isdir(y_path)):
+                                    
+                                    all_files_for_year = []
+                                    yearlyName = f'{y_path}\\{y}_{c}_{t}.csv'
 
-                                    yearlydf = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-                                    yearlydf.set_index('time', inplace=True)
-                                    yearlydf.sort_index()
+                                    if not os.listdir(y_path) == []:
+                                        for f in os.listdir(y_path):
+                                            print(f'\r{f}', end='', flush=True)
+                                            f_path = f'{y_path}\\{f}'
+                                            if not f_path == yearlyName:
+                                                df = pandas.read_csv(f_path)
+                                                all_files_for_year.append(df)
 
-                                    yearlydf.to_csv(f'{y_path}\\{y}_{c}_{t}.csv')
-                                if currencydf.empty:
-                                    print(f'first {y} yearly for {c}_{t}')
-                                    currencydf = yearlydf
-                                else:
-                                    print(f'merger yearly adding on  {y}_{c}_{t}')
-                                    pandas.concat([currencydf, yearlydf])
+                                        yearlydf = pandas.concat(all_files_for_year)
+                                        yearlydf = yearlydf.loc[:, ~yearlydf.columns.str.contains('^Unnamed')]
+                                        yearlydf.set_index('time', inplace=True)
+                                        yearlydf.sort_index(inplace=True)
+                                        yearlydf.to_csv(yearlyName)
+                                        all_years_for_currency.append(yearlydf)
+                                        print(f'\rfinished writing {yearlyName}')
+                                    else:
+                                         print(f'no files present to merge in {y_path}')
+
+                            currencydf = pandas.concat(all_years_for_currency)
                             currencydf = df.loc[:, ~df.columns.str.contains('^Unnamed')]
                             currencydf.set_index('time', inplace=True)
-                            currencydf.sort_index()
-                            print(f'finished full merge for {c} {t}')
-                            currencydf.to_csv(f'{currency_path}\\FULL_{c}_{t}.csv')
-                                         
+                            currencydf.sort_index(inplace=True)
+                            currencydf.to_csv(full_name)
+                            print(f'finished full merge for {full_name}')
+                        else:
+                            print(f'no yearly data available to merge in {currency_path}')
+                        print(f'merge for {c} in {t} res finsihed')
+            else:
+                print(f'no data present in {path}')
+        else:
+            print(f'{path} does not exist yet, get data first')
+    print('merge completed')
+    return True
