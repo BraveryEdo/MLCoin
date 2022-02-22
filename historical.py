@@ -120,8 +120,11 @@ def getData(currency, y_path, year):
                 #print(df_history.head(5))
                 # Add column names in line with the Coinbase Pro documentation
                 df_history.columns  = ['time','low','high','open','close','volume']
-            
-
+                #add a user friendly time field, might also help in learning patterns between months
+                if not 'UF_time' in df_history.columns:
+                    df_history['UF_time'] = (pandas.to_datetime(df_history['time'], unit='s'))
+                df_history.set_index('time', inplace=True)
+                df_history.sort_index()
                 df_history.to_csv(finalpath)
 
             else:

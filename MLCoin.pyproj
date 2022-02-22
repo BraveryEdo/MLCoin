@@ -26,6 +26,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="historical.py" />
+    <Compile Include="mergeData.py" />
     <Compile Include="MLCoin.py" />
   </ItemGroup>
   <ItemGroup>
