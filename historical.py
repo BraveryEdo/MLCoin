@@ -12,18 +12,23 @@ import math
 import threading
 from datetime import datetime, timedelta
 import os
+from fake_useragent import UserAgent
 
+from requests.models import PreparedRequest
 CONTINUE_TRAINING = True
 REST_API = 'https://api.pro.coinbase.com'
 PRODUCTS = REST_API+'/products'
 csv_path = 'csv_data'
-start_year = 2015
+start_year = 2016
 # I am only interested in a few currencies that I want to trade, so let's add them here:
 #MY_CURRENCIES = ['BTC-USD','ETH-USD','LTC-USD','DOGE-USD','SHIB-USD','ALGO-USD','MANA-USD','MATIC-USD']
 MY_CURRENCIES = ['BTC-USD']
-TIME_SCALE = '1hr'
+TIME_SCALE = '5min'
 
 time_lens = {'1min':60, '5min':300, '15min':900, '1hr':3600, '6hr':21600, '1day':86400}
+ua = UserAgent()
+#print(ua.chrome)
+header = {'User-Agent':str(ua.chrome)}
 
 
 result=None
@@ -32,30 +37,29 @@ threadList=[]
 result_available = threading.Event()
 exit_thread = threading.Event()
 
-def connect(url, *args):
-    print(f'trying {url}, {args}')
+def connect(url, args):
+    #print(f'trying {url}, {args}')
     global result
+    response = None
     try:
-        response = None
         if args is not None:
-            response = requests.get(url,args)
+            response = requests.get(url, args, headers=header)
         else:
             response = requests.get(url)
         response.raise_for_status()
-        print('HTTP connection success!')
-        #return response
+        #print('HTTP connection success!')
         result = response
         result_available.set()
+        return response
     except HTTPError as http_err:
         print(f'HTTP error occurred: {http_err}')
     except Exception as err:
         print(f'Other error occurred: {err}')
-    return response
             
       
 
 def getData(currency, y_path, year):
-    print(f'getData {currency} + {year} @ {y_path}')
+    #print(f'getData {currency} + {year} @ {y_path}')
     #getting historical data from candles not individual trades, that might be a bit much
     pair_path = PRODUCTS + '/' + currency + '/candles'
     res = time_lens[TIME_SCALE]
@@ -72,55 +76,84 @@ def getData(currency, y_path, year):
     end = datetime(year, 12, 31, 23, 59, 59, 0)
     if year == datetime.now().year:
         end = datetime.now()
-
+    
+    candlesPerCall = 256.0 #if you change this then subsequent runs might skip current data for this year consider deleting YTD data
     delta = end - start
     deltaSeconds = delta.total_seconds()
     numCandles = math.ceil(deltaSeconds/res)
-    approxCalls = int(math.ceil(numCandles/300.0))
+    approxCalls = int(math.ceil(numCandles/candlesPerCall))
     delta = timedelta(seconds=math.ceil(deltaSeconds/approxCalls))
     s = start
     e = start + delta
 
     last_call = datetime.now()
+
+    #print(f'before while: delta:{delta}, start:{s}, end:{end}, #Calls for range:{approxCalls}, #datapoints per call:{numCandles/approxCalls}')
     global result
-    while progress < approxCalls and datetime.now()-e > timedelta(seconds=(time_lens[TIME_SCALE]*2)):
-        print(f'start,end was: {start},{end}, using get with {s},{e}')
-        params = {'start':s.isoformat(), 'end':e.isoformat(), 'granularity':res}
-        thread = threading.Thread(target=connect, args=(pair_path, params,), daemon=True)
-        threadList.append(thread)
-        thread.start()
-        result_available.wait()
-        if result.status_code == 200:
-            print(result.columns)
-            filename = f'{currency}_{year}_{progress}.csv'
-
-            df_history = pandas.read_json(result.text)
+    while True:
+        #print(f'start,end was: {start},{end}, using get with {s},{e}')
+        
+        filename = f'{currency}_{year}_{progress}.csv'
+        finalpath = f'{y_path}\\{filename}'
+        if not os.path.exists(finalpath):
+            params = {'start':s.isoformat(), 'end':e.isoformat(), 'granularity':res}
+            thread = threading.Thread(target=connect, args=(pair_path, params))
+            threadList.append(thread)
+            thread.start()
+            result_available.wait()
+            if result.status_code == 200:
+                '''
+                print(f'filename chosen: {filename}')
+                print(result.__attrs__) #['_content', 'status_code', 'headers', 'url', 'history', 'encoding', 'reason', 'cookies', 'elapsed', 'request']
+                print(result.status_code)
+                print(result.headers)
+                print(result.url)
+                print(result.history)
+                print(result.encoding)
+                print(result.reason)
+                print(result.cookies)
+                print(result.elapsed)
+                print(result.request)
             
-            print(df_history.head(5))
-            # Add column names in line with the Coinbase Pro documentation
-            df_history.columns  = ['time','low','high','open','close','volume']
+                '''
+                df_history = pandas.read_json(result.text)
+                #print(df_history.head(5))
+                # Add column names in line with the Coinbase Pro documentation
+                df_history.columns  = ['time','low','high','open','close','volume']
             
 
-            df_history.to_csv(f'{y_path}\\{filename}')
+                df_history.to_csv(finalpath)
 
+            else:
+                print(f'skipped sequence {progress} in {currency}_{year} due to bad response')
+
+         
+            dt = (datetime.now()-last_call).total_seconds()
+            if  dt < timeToSleep:
+                #print(f'dt:{dt}, target:{timeToSleep}')
+                time.sleep(min(abs(timeToSleep-dt), timeToSleep))
+            
+            last_call = datetime.now()
+            #result = None 
         else:
-            print(f'skipped sequence {progress} in {currency}_{year} due to bad response')
+            pass
+            #no need to sleep if we're not making a request to server
+            #print('file already populated')
 
         progress = progress + 1
         progPercent = (progress/approxCalls)*100.0
         s = s+delta
         e = e+delta
-        print(f'\r{progPercent}% done...  last response code:{result.status_code}', flush=True)
-        print(f'')
+        twodecimal = "{:.2f}".format(progPercent)
+        print(f'\r{currency} {year} in {TIME_SCALE} res is {twodecimal}% done...', end= '', flush=True)
+        if result.response_code == 200:
+            pass
+        else:
+            print(f'      last response not 200, instead:{result.response_code}')
         
-        dt = datetime.now()-last_call
-        if  dt < timeToSleep:
-            print(f'dt:{dt}, target:{timeToSleep}')
-            time.sleep(min(abs(timeToSleep-dt), timeToSleep))
-            
-        last_call = datetime.now()
-        result = None 
-        
+
+        if not (progress < approxCalls and datetime.now()-e > timedelta(seconds=(time_lens[TIME_SCALE]*2))):
+            break
     return True
 
 def populateYearPath(currency, y_path, year):
@@ -132,7 +165,8 @@ def populateYearPath(currency, y_path, year):
         if(getData(currency, y_path, year)):
             print(f'finished loading csv\'s for {currency} {year}')
     else:
-        print(f'{currency}, {year}, contains: {fileList} from previous run. to rerun, remove old files at {y_path}')
+        pass
+        #print(f'{currency}, {year}, contains: {fileList} from previous run. to rerun, remove old files at {y_path}')
     return True
 
 def makeYearPaths(currency, c_path):
@@ -167,7 +201,8 @@ def populateCurrencyPath(currency, c_path):
             elif os.listdir(y_path) == []:
                 populateYearPath(currency, y_path, i)
             else:
-                print(f'pass case in populateCurrencyPath {currency} @ {i}')
+                pass
+                #print(f'pass case in populateCurrencyPath {currency} @ {i}')
          
     return True
 
@@ -180,10 +215,10 @@ def makeCurrencyPath(currency, c_path):
 
 
 
-def populateRootPath():
+def populateRootPath(basePath):
     print("populateRootPath")
     for currency in MY_CURRENCIES:
-        curr_path = csv_path + '\\' + currency
+        curr_path = basePath + '\\' + currency
         if os.path.isdir(curr_path) == False:
             #super empty, make the directory and fill it
             makeCurrencyPath(currency, curr_path)
@@ -191,18 +226,32 @@ def populateRootPath():
             populateCurrencyPath(currency, curr_path)
     return True
 
-def makeRootPath():
+def makeRootPath(basePath):
     print("makeRootPath")
-    os.mkdir(csv_path)
-    print('added csv_data main folder')
-    populateRootPath()
+    os.mkdir(basePath)
+    print(f'added {basePath} main folder')
+    populateRootPath(basePath)
+    return True
+
+def getHistorical(basePath):
+    #check for folder structure
+    if os.path.isdir(basePath) == False:
+        makeRootPath(basePath)
+    else:
+        populateRootPath(basePath)
+
     return True
 
 def getHistorical():
-    #check for folder structure
-    if os.path.isdir(csv_path) == False:
-        makeRootPath()
-    else:
-        populateRootPath()
+    getHistorical(csv_path)
+    return True
 
+def getMultRes():
+    for v in time_lens:
+        path = f'{csv_path}_{v}_res'
+        TIME_SCALE = v
+        if os.path.isdir(path) == False:
+            makeRootPath(path)
+        else:
+            populateRootPath(path)
     return True
