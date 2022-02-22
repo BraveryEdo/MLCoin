@@ -1,3 +1,5 @@
+from types import NoneType
+from pandas.core.base import NoNewAttributesMixin
 import requests
 from requests import Request, Session
 from urllib.error import HTTPError
@@ -34,12 +36,13 @@ def connect(url, *args):
     print(f'trying {url}, {args}')
     global result
     try:
+        response = None
         if args is not None:
             response = requests.get(url,args)
         else:
             response = requests.get(url)
         response.raise_for_status()
-        #print('HTTP connection success!')
+        print('HTTP connection success!')
         #return response
         result = response
         result_available.set()
@@ -47,11 +50,12 @@ def connect(url, *args):
         print(f'HTTP error occurred: {http_err}')
     except Exception as err:
         print(f'Other error occurred: {err}')
+    return response
             
       
 
 def getData(currency, y_path, year):
-    print(f'getData {currency}, {year}')
+    print(f'getData {currency} + {year} @ {y_path}')
     #getting historical data from candles not individual trades, that might be a bit much
     pair_path = PRODUCTS + '/' + currency + '/candles'
     res = time_lens[TIME_SCALE]
@@ -69,33 +73,34 @@ def getData(currency, y_path, year):
     if year == datetime.now().year:
         end = datetime.now()
 
-    delta = start - end
+    delta = end - start
     deltaSeconds = delta.total_seconds()
     numCandles = math.ceil(deltaSeconds/res)
     approxCalls = int(math.ceil(numCandles/300.0))
+    delta = timedelta(seconds=math.ceil(deltaSeconds/approxCalls))
     s = start
     e = start + delta
 
     last_call = datetime.now()
-
-    while True:
-        
+    global result
+    while progress < approxCalls and datetime.now()-e > timedelta(seconds=(time_lens[TIME_SCALE]*2)):
+        print(f'start,end was: {start},{end}, using get with {s},{e}')
         params = {'start':s.isoformat(), 'end':e.isoformat(), 'granularity':res}
         thread = threading.Thread(target=connect, args=(pair_path, params,), daemon=True)
         threadList.append(thread)
         thread.start()
         result_available.wait()
         if result.status_code == 200:
+            print(result.columns)
             filename = f'{currency}_{year}_{progress}.csv'
 
             df_history = pandas.read_json(result.text)
-            print(df_history)
+            
+            print(df_history.head(5))
             # Add column names in line with the Coinbase Pro documentation
             df_history.columns  = ['time','low','high','open','close','volume']
+            
 
-            # Index sorted by time
-
-            df_history.set_index('time', inplace=True)
             df_history.to_csv(f'{y_path}\\{filename}')
 
         else:
@@ -111,15 +116,15 @@ def getData(currency, y_path, year):
         dt = datetime.now()-last_call
         if  dt < timeToSleep:
             print(f'dt:{dt}, target:{timeToSleep}')
-            wait(min(abs(timeToSleep-dt), timeToSleep))
+            time.sleep(min(abs(timeToSleep-dt), timeToSleep))
             
         last_call = datetime.now()
-
-    #sanity check, clean up any random threads
+        result = None 
+        
     return True
 
 def populateYearPath(currency, y_path, year):
-    print("populateYearPath")
+    print(f'populateYearPath: {year} @ {y_path}')
     fileList = []
     if os.path.isdir(y_path):
         fileList = os.listdir(y_path)
@@ -131,7 +136,7 @@ def populateYearPath(currency, y_path, year):
     return True
 
 def makeYearPaths(currency, c_path):
-    print("makeYearPaths")
+    print(f'makeYearPaths {currency} @ {c_path}')
     #make folders for each year starting with start year
     end_year = datetime.now().year
     for i in range (start_year, end_year+1):
@@ -143,7 +148,7 @@ def makeYearPaths(currency, c_path):
     return True
 
 def populateCurrencyPath(currency, c_path):
-    print("populateCurrencyPath")
+    print(f'populateCurrencyPath {currency} @ {c_path}')
     fileList = []
     if os.path.isdir(c_path):
         fileList = os.listdir(c_path)
@@ -154,15 +159,20 @@ def populateCurrencyPath(currency, c_path):
         #possibly stopped mid DL
         end_year = datetime.now().year
         for i in range (start_year, end_year+1):
-            if not os.path.isdir(c_path + f'\\{i}'):
-                populateYearPath(currency, c_path + f'\\{i}', i)
+            y_path = c_path + f'\\{i}'
+            if not os.path.isdir(y_path):
+                os.mkdir(y_path)
+                print(f'made {i} path for {currency}')
+                populateYearPath(currency, y_path, i)
+            elif os.listdir(y_path) == []:
+                populateYearPath(currency, y_path, i)
             else:
-                pass
+                print(f'pass case in populateCurrencyPath {currency} @ {i}')
          
     return True
 
 def makeCurrencyPath(currency, c_path):
-    print("makeCurrencyPath")
+    print(f'makeCurrencyPath {currency} @ {c_path}')
     os.mkdir(c_path)
     print(f'added {currency} subfolder')
     populateCurrencyPath(currency, c_path)
@@ -189,20 +199,6 @@ def makeRootPath():
     return True
 
 def getHistorical():
-    thread = threading.Thread(target=connect, args=(PRODUCTS,), daemon=True)
-    threadList.append(thread)
-    thread.start()
-    result_available.wait()
-    response_content = result.content
-    response_text = result.text
-    #response_headers = response.headers
-    df_currencies = pandas.read_json (response_text)
-    #print("\nNumber of columns in the dataframe: %i" % (df_currencies.shape[1]))
-    #print("Number of rows in the dataframe: %i\n" % (df_currencies.shape[0]))
-    columns = list(df_currencies.columns)
-    print('quick online status check')
-    print(df_currencies[df_currencies.id.isin(MY_CURRENCIES)][['id', 'quote_currency', 'status']])
-
     #check for folder structure
     if os.path.isdir(csv_path) == False:
         makeRootPath()
