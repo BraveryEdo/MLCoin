@@ -29,7 +29,6 @@ ua = UserAgent()
 header = {'User-Agent':str(ua.chrome)}
 
 result=None
-progress=None
 threadList=[]
 result_available = threading.Event()
 
@@ -73,8 +72,7 @@ def getData(currency, y_path, year):
     res = time_lens[TIME_SCALE]
 
     #loop through provided time range given time resolution
-    global progress
-    progress = 0
+    file_sequence = 0
     global threadList
     threadList = []
     callsPerSecond = 5.0
@@ -106,7 +104,7 @@ def getData(currency, y_path, year):
     while True:
 
        # print(f'using get with {s},{e} DELTA: {delta} in {year}')
-        filename = f'{currency}_{year}_{progress}.csv'
+        filename = f'{currency}_{year}_{file_sequence}.csv'
         finalpath = f'{y_path}\\{filename}'
 
         last_element_timestamp = datetime.timestamp(s)
@@ -151,14 +149,15 @@ def getData(currency, y_path, year):
                     if len(df_history) > 0:
                         last_element_timestamp = df_history.index[-1]
                         df_history.to_csv(finalpath)
-                        progress = progress + 1
+                        file_sequence = file_sequence + 1
                     else:
-                        last_element_timestamp = datetime.timestamp(datetime.utcfromtimestamp(last_element_timestamp)+timedelta(seconds=time_lens[TIME_SCALE]))
+                        #last get ended up giving 0 data
+                        last_element_timestamp = datetime.timestamp(datetime.utcfromtimestamp(last_element_timestamp)+timedelta(seconds=time_lens[TIME_SCALE]/2.0))
                 else:
-                    print(f'\rskipped sequence {progress} in {currency}_{year} last response data not as expected or not present')
+                    print(f'\rskipped sequence {file_sequence} in {currency}_{year} last response data not as expected or not present')
 
             else:
-                print(f'\rskipped sequence {progress} in {currency}_{year} last response not 200, instead:{result.response_code}')
+                print(f'\rskipped sequence {file_sequence} in {currency}_{year} last response not 200, instead:{result.response_code}')
          
             dt = (datetime.now()-last_call).total_seconds()
             if  dt < timeToSleep:
@@ -167,7 +166,7 @@ def getData(currency, y_path, year):
             last_call = datetime.now()
 
         
-        progPercent = (progress/approxCalls)*100.0
+        progPercent = 100.0-((end.timestamp()-last_element_timestamp)/(yeardelta.total_seconds())*100.0)
         s = (datetime.fromtimestamp(last_element_timestamp)+timedelta(seconds=time_lens[TIME_SCALE])).astimezone(timezone.utc)
         e = s+delta
         if e.year > year:
@@ -189,11 +188,6 @@ def getData(currency, y_path, year):
         #shouldnt be reachable but yaknow
         elif e > now_utc or s > now_utc:
             break
-        '''
-        #might actually skip some data at the end of each year, needs some fine tuning
-        #if not (progress < approxCalls and datetime.now(datetime.timezone.utc)-e > timedelta(seconds=(time_lens[TIME_SCALE]*2))):
-        #    break
-        '''
             
     return True
 

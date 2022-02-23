@@ -87,9 +87,9 @@ def merger():
                     currency_path = f'{path}\\{c}'
                     print(currency_path)
                     full_name = f'{currency_path}\\FULL_{c}_{t}.csv'
-                    all_years_for_currency = []
                     if os.path.isdir(currency_path):
                         if not os.listdir(currency_path) == []:
+                            
                             for y in os.listdir(currency_path):
                                 y_path = f'{currency_path}\\{y}'
                                 print(y_path)
@@ -111,11 +111,24 @@ def merger():
                                         yearlydf.set_index('time', inplace=True)
                                         yearlydf.drop_duplicates(inplace=True)
                                         yearlydf.sort_index(inplace=True)
-                                        all_years_for_currency.append(yearlydf)
                                         yearlydf.to_csv(yearlyName)
                                         print(f'\rfinished writing {yearlyName}')
                                     else:
                                          print(f'no files present to merge in {y_path}')
+
+                            
+                            all_years_for_currency = []
+                            for y in os.listdir(currency_path):
+                                y_path = f'{currency_path}\\{y}'
+                                if (not full_name == y_path) and (os.path.isdir(y_path)):
+                                    
+                                    all_files_for_year = []
+                                    yearly = f'{y_path}\\{y}_{c}_{t}.csv'
+
+                                    if os.path.exists(yearly):
+                                        df = pandas.read_csv(yearly)
+                                        all_years_for_currency.append(df)
+                                    
                             print(f'{len(all_years_for_currency)} dataframes in full list')
                             currencydf = pandas.concat(all_years_for_currency)
                             currencydf = df.loc[:, ~df.columns.str.contains('^Unnamed')]
