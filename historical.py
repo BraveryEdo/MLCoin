@@ -10,7 +10,7 @@ from pandas import read_table
 import math
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from fake_useragent import UserAgent
 import config
@@ -77,19 +77,19 @@ def getData(currency, y_path, year):
     progress = 0
     global threadList
     threadList = []
-    callsPerSecond = 7.0
+    callsPerSecond = 5.0
     timeToSleep = 1.0/callsPerSecond
-
-    start = datetime(year, 1, 1, 0, 0, 0, 0)
-    end = datetime(year, 12, 31, 23, 59, 59, 0)
-    if year == datetime.now().year:
-        end = datetime.now()
+    print(f'getting data for year: {year}')
+    start = datetime(year, 1, 1, 0, 0, 0, 0, timezone.utc)
+    end = datetime(year, 12, 31, 23, 59, 59, 0, timezone.utc)
+    if year == datetime.now(timezone.utc).year:
+        end = datetime.now(timezone.utc)
     
     candlesPerCall = 256.0 #if you change this then subsequent runs might skip current data for this year consider deleting YTD data
     #timedelta obj which is equal to the ammount of time between 1st and last day of the year
     yeardelta = end - start
     #FIVE HUNDRED TWENTYFIVE THOUSAND SIX HUNDRED MINUTESSSSS *x60
-    deltaSeconds = yeardelta.total_seconds()
+    deltaSeconds = abs(yeardelta.total_seconds())
     #how many data points should this pull for the year
     numCandles = math.ceil(deltaSeconds/res)
     #only approximate because coinbase api might give back data slightly outside of the specified range ::shrugs::
@@ -104,17 +104,12 @@ def getData(currency, y_path, year):
     #print(f'before while: delta:{delta}, start:{s}, end:{end}, #Calls for range:{approxCalls}, #datapoints per call:{numCandles/approxCalls}')
     global result
     while True:
-        #might end early by one frame... work on this edge case
-        if s.year > year:
-            #finished off the year
-            break
-        if e.year > year or e > end:
-            #set e to end of year
-            break
 
-        #print(f'start,end was: {start},{end}, using get with {s},{e}')
+       # print(f'using get with {s},{e} DELTA: {delta} in {year}')
         filename = f'{currency}_{year}_{progress}.csv'
         finalpath = f'{y_path}\\{filename}'
+
+        last_element_timestamp = datetime.timestamp(s)
         if not os.path.exists(finalpath):
             params = {'start':s.isoformat(), 'end':e.isoformat(), 'granularity':res}
             thread = threading.Thread(target=connect, args=(pair_path, params))
@@ -141,45 +136,62 @@ def getData(currency, y_path, year):
                 # Add column names in line with the Coinbase Pro documentation
                 if not len(df_history.columns) == 0:
                     df_history.columns  = ['time','low','high','open','close','volume']
-                    #drop all rows outside of desired year
-                    df_history = df_history[df_history['time'] > start.timestamp()]
-                    df_history = df_history[df_history['time'] < end.timestamp()]
+                    
                     #add a user friendly time field, might also help in learning patterns between months
                     df_history.drop_duplicates(inplace=True)
                     if not 'UF_time' in df_history.columns:
-                        df_history['UF_time'] = (pandas.to_datetime(df_history['time'], unit='s'))
+                        df_history['UF_time'] = (pandas.to_datetime(df_history['time'], unit='s', utc=True))
                     df_history.set_index('time', inplace=True)
                     df_history.sort_index(inplace=True)
-                    df_history.to_csv(finalpath)
+                    #drop all rows outside of desired year
+                    df_copy = df_history
+                    df_history = df_history[df_history.index >= start.timestamp()]
+                    df_history = df_history[df_history.index <= end.timestamp()]
+                 
+                    if len(df_history) > 0:
+                        last_element_timestamp = df_history.index[-1]
+                        df_history.to_csv(finalpath)
+                        progress = progress + 1
+                    else:
+                        last_element_timestamp = datetime.timestamp(datetime.utcfromtimestamp(last_element_timestamp)+timedelta(seconds=time_lens[TIME_SCALE]))
                 else:
-                    print(f'/rskipped sequence {progress} in {currency}_{year} last response data not as expected or not present')
+                    print(f'\rskipped sequence {progress} in {currency}_{year} last response data not as expected or not present')
 
             else:
-                print(f'/rskipped sequence {progress} in {currency}_{year} last response not 200, instead:{result.response_code}')
+                print(f'\rskipped sequence {progress} in {currency}_{year} last response not 200, instead:{result.response_code}')
          
             dt = (datetime.now()-last_call).total_seconds()
             if  dt < timeToSleep:
-                #print(f'dt:{dt}, target:{timeToSleep}')
                 time.sleep(min(abs(timeToSleep-dt), timeToSleep))
             
             last_call = datetime.now()
-            #result = None 
-        else:
-            pass
-            #no need to sleep if we're not making a request to server
-            #print('file already populated')
 
-        progress = progress + 1
+        
         progPercent = (progress/approxCalls)*100.0
-        s = s+delta
-        e = e+delta
+        s = (datetime.fromtimestamp(last_element_timestamp)+timedelta(seconds=time_lens[TIME_SCALE])).astimezone(timezone.utc)
+        e = s+delta
+        if e.year > year:
+            e = end
         twodecimal = "{:.2f}".format(progPercent)
         print(f'\r{currency} {year} in {TIME_SCALE} res is {twodecimal}% done...', end= '', flush=True)
-        
-        
+        #break cases split up for readability
+        now_utc = datetime.now(timezone.utc)
+        #last_element_timestamp's year is greater than target year or today
+
+        if last_element_timestamp > end.timestamp() or last_element_timestamp > now_utc.timestamp():
+            break
+        #somehow start date is in the future
+        elif s > e:
+            break
+        #start date got ahead of target year or end date before target year???
+        elif s.year > year or e.year < year:
+            break
+        #shouldnt be reachable but yaknow
+        elif e > now_utc or s > now_utc:
+            break
         '''
         #might actually skip some data at the end of each year, needs some fine tuning
-        #if not (progress < approxCalls and datetime.now()-e > timedelta(seconds=(time_lens[TIME_SCALE]*2))):
+        #if not (progress < approxCalls and datetime.now(datetime.timezone.utc)-e > timedelta(seconds=(time_lens[TIME_SCALE]*2))):
         #    break
         '''
             
@@ -202,7 +214,7 @@ def populateYearPath(currency, y_path, year):
 def makeYearPaths(currency, c_path):
     print(f'makeYearPaths {currency} @ {c_path}')
     #make folders for each year starting with start year
-    end_year = datetime.now().year
+    end_year = datetime.now(timezone.utc).year
     for i in range (start_year, end_year+1):
         y_path = c_path + f'\\{i}'
         os.mkdir(y_path)
@@ -221,7 +233,7 @@ def populateCurrencyPath(currency, c_path):
         makeYearPaths(currency, c_path)
     else: 
         #possibly stopped mid DL
-        end_year = datetime.now().year
+        end_year = datetime.now(timezone.utc).year
         for i in range (start_year, end_year+1):
             y_path = c_path + f'\\{i}'
             if not os.path.isdir(y_path):
