@@ -78,11 +78,42 @@ def getData(currency, y_path, year):
     callsPerSecond = 5.0
     timeToSleep = 1.0/callsPerSecond
     print(f'getting data for year: {year}')
+    
     start = datetime(year, 1, 1, 0, 0, 0, 0, timezone.utc)
     end = datetime(year, 12, 31, 23, 59, 59, 0, timezone.utc)
+   
     if year == datetime.now(timezone.utc).year:
         end = datetime.now(timezone.utc)
-    
+
+    if not os.listdir(y_path) == []:
+        #already contains data continue to fill from last good index
+        #prune useless files
+        for f in os.listdir(y_path):
+            f_path = f'{y_path}\\f'
+            if os.path.isfile(f_path):
+                #remove all 0kb files
+                #remove all 0 entry
+                if os.path.getsize(f_path) == 0 or len(df.read_csv(f_path), index_col=0) == 0:
+                    print('removing some garb files, yw')
+                    os.remove(f_path)
+        #recheck to see if there is any data left after prev prune
+        if not os.listdir(y_path) == []:
+            #open last csv
+            last_path = f'{y_path}\\{os.listdir(y_path)[-1]}'
+            #make sure its not a folder
+            if os.path.isfile(last_path):
+                last_df = pandas.read_csv(last_path, index_col=0)
+                last_index = last_df.index[-1]
+                #print(f'last index: {datetime.utcfromtimestamp(last_index).isoformat()}')
+                if last_index > start.timestamp() and last_index < end.timestamp():
+                    #if we are more than one resolution step from end try to get more data
+                    if end - datetime.utcfromtimestamp(last_index).astimezone(timezone.utc) > timedelta(seconds=time_lens[TIME_SCALE]):
+                        new_start = datetime.utcfromtimestamp(last_index) 
+                        #nice, actually can do something from here  
+                        print(f'continuing prev DL for {currency} {year} {TIME_SCALE} at {new_start.isoformat()}')
+                        start = datetime.utcfromtimestamp(last_index).astimezone(timezone.utc)
+                    
+
     candlesPerCall = 256.0 #if you change this then subsequent runs might skip current data for this year consider deleting YTD data
     #timedelta obj which is equal to the ammount of time between 1st and last day of the year
     yeardelta = end - start
@@ -97,14 +128,16 @@ def getData(currency, y_path, year):
     s = start
     e = start + delta
 
-    last_call = datetime.now()
+
+    last_call_rate_limiter = datetime.now()
 
     #print(f'before while: delta:{delta}, start:{s}, end:{end}, #Calls for range:{approxCalls}, #datapoints per call:{numCandles/approxCalls}')
     global result
     while True:
 
        # print(f'using get with {s},{e} DELTA: {delta} in {year}')
-        filename = f'{currency}_{year}_{file_sequence}.csv'
+        zpad = 7
+        filename = f'{currency}_{year}_{str(file_sequence).zfill(zpad)}.csv'
         finalpath = f'{y_path}\\{filename}'
 
         last_element_timestamp = datetime.timestamp(s)
@@ -152,6 +185,8 @@ def getData(currency, y_path, year):
                         file_sequence = file_sequence + 1
                     else:
                         #last get ended up giving 0 data
+                        let_date = datetime.utcfromtimestamp(last_element_timestamp).isoformat()
+                        print(f'\n returned no data after trimimming {let_date}')
                         last_element_timestamp = datetime.timestamp(datetime.utcfromtimestamp(last_element_timestamp)+timedelta(seconds=time_lens[TIME_SCALE]/2.0))
                 else:
                     print(f'\rskipped sequence {file_sequence} in {currency}_{year} last response data not as expected or not present')
@@ -159,15 +194,15 @@ def getData(currency, y_path, year):
             else:
                 print(f'\rskipped sequence {file_sequence} in {currency}_{year} last response not 200, instead:{result.response_code}')
          
-            dt = (datetime.now()-last_call).total_seconds()
+            dt = (datetime.now()-last_call_rate_limiter).total_seconds()
             if  dt < timeToSleep:
                 time.sleep(min(abs(timeToSleep-dt), timeToSleep))
             
-            last_call = datetime.now()
+            last_call_rate_limiter = datetime.now()
 
         
         progPercent = 100.0-((end.timestamp()-last_element_timestamp)/(yeardelta.total_seconds())*100.0)
-        s = (datetime.fromtimestamp(last_element_timestamp)+timedelta(seconds=time_lens[TIME_SCALE])).astimezone(timezone.utc)
+        s = (datetime.utcfromtimestamp(last_element_timestamp)+timedelta(seconds=time_lens[TIME_SCALE])).astimezone(timezone.utc)
         e = s+delta
         if e.year > year:
             e = end
@@ -234,11 +269,8 @@ def populateCurrencyPath(currency, c_path):
                 os.mkdir(y_path)
                 print(f'made {i} path for {currency}')
                 populateYearPath(currency, y_path, i)
-            elif os.listdir(y_path) == []:
-                populateYearPath(currency, y_path, i)
             else:
-                pass
-                #print(f'pass case in populateCurrencyPath {currency} @ {i}')
+                populateYearPath(currency, y_path, i)
          
     return True
 
