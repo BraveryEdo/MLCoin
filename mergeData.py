@@ -84,6 +84,8 @@ def merger():
                 for c in os.listdir(path):
                     currency_path = f'{path}\\{c}'
                     print(currency_path)
+                    global start_year
+                    start_year = config.START_YEAR_BY_CURRENCY[c]
                     full_name = f'{currency_path}\\FULL_{c}_{t}.csv'
                     if os.path.isdir(currency_path):
                         if not os.listdir(currency_path) == []:

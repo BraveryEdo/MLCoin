@@ -66,6 +66,8 @@ def connect(url, args):
       
 
 def getData(currency, y_path, year):
+    global start_year
+    start_year = config.START_YEAR_BY_CURRENCY[currency]
     #print(f'getData {currency} + {year} @ {y_path}')
     #getting historical data from candles not individual trades, that might be a bit much
     pair_path = PRODUCTS + '/' + currency + '/candles'
@@ -79,7 +81,7 @@ def getData(currency, y_path, year):
     timeToSleep = 1.0/callsPerSecond
     print(f'getting data for year: {year}')
     
-    start = datetime(year, 1, 1, 0, 0, 0, 0, timezone.utc)
+    start = datetime(year, 1, 1, 0, 0, 1, 0, timezone.utc)
     end = datetime(year, 12, 31, 23, 59, 59, 0, timezone.utc)
    
     if year == datetime.now(timezone.utc).year:
@@ -241,6 +243,8 @@ def populateYearPath(currency, y_path, year):
     return True
 
 def makeYearPaths(currency, c_path):
+    global start_year
+    start_year = config.START_YEAR_BY_CURRENCY[currency]
     print(f'makeYearPaths {currency} @ {c_path}')
     #make folders for each year starting with start year
     end_year = datetime.now(timezone.utc).year
@@ -253,6 +257,8 @@ def makeYearPaths(currency, c_path):
     return True
 
 def populateCurrencyPath(currency, c_path):
+    global start_year
+    start_year = config.START_YEAR_BY_CURRENCY[currency]
     print(f'populateCurrencyPath {currency} @ {c_path}')
     fileList = []
     if os.path.isdir(c_path):
@@ -286,6 +292,8 @@ def makeCurrencyPath(currency, c_path):
 def populateRootPath(basePath):
     print("populateRootPath")
     for currency in MY_CURRENCIES:
+        global start_year
+        start_year = config.START_YEAR_BY_CURRENCY[currency]
         curr_path = basePath + '\\' + currency
         if os.path.isdir(curr_path) == False:
             #super empty, make the directory and fill it
