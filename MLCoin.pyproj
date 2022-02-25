@@ -29,6 +29,7 @@
     <Compile Include="mergeData.py" />
     <Compile Include="MLCoin.py" />
     <Compile Include="config.py" />
+    <Compile Include="hackernewsScraper.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="environment.yml" />

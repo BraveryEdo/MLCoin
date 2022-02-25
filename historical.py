@@ -24,9 +24,8 @@ time_lens = config.time_lens
 #default time scale to use unless otherwise (correctly) specified
 TIME_SCALE = '5min'
 
-ua = UserAgent()
-#print(ua.chrome)
-header = {'User-Agent':str(ua.chrome)}
+ua = UserAgent(fallback='chrome')
+header = {'User-Agent':str(ua.random)}
 
 result=None
 threadList=[]
@@ -35,12 +34,12 @@ result_available = threading.Event()
 '''
 csv data structure:
 root:
-root level: [csv_data_{RESOLUTION}_res]:
-    currency folder [BTC-USD]:
-        full summry file *if generated*: FULL_[BTC-USD]_{RESOLUTION}.csv
-        year folder [2020]:
-            data: [BTC-USD]_{YEAR}_{sequence}.csv
-            yearly data summary file *if generated*: {YEAR}_[BTC-USD]_{RESOLUTION}.csv
+root level: csv_data_{RESOLUTION:1min}_res:
+    currency folder {CURRENCY:BTC-USD}:
+        full summry file *if generated*: FULL_{BTC-USD}_{RESOLUTION}.csv
+        year folder {YEAR:2020}:
+            data: {BTC-USD}_{YEAR}_{sequence}.csv
+            yearly data summary file *if generated*: {YEAR}_{BTC-USD}_{RESOLUTION}.csv
 '''
 
 
@@ -132,13 +131,15 @@ def getData(currency, y_path, year):
 
 
     last_call_rate_limiter = datetime.now()
-
+    max_tries = config.max_tries
+    try_count = 0
+    zpad = config.csv_zero_pad_for_sequence
     #print(f'before while: delta:{delta}, start:{s}, end:{end}, #Calls for range:{approxCalls}, #datapoints per call:{numCandles/approxCalls}')
     global result
     while True:
 
        # print(f'using get with {s},{e} DELTA: {delta} in {year}')
-        zpad = 7
+
         filename = f'{currency}_{year}_{str(file_sequence).zfill(zpad)}.csv'
         finalpath = f'{y_path}\\{filename}'
 
@@ -150,6 +151,7 @@ def getData(currency, y_path, year):
             thread.start()
             result_available.wait()
             if result.status_code == 200:
+                try_count = 0
                 '''
                 print(f'filename chosen: {filename}')
                 print(result.__attrs__) #['_content', 'status_code', 'headers', 'url', 'history', 'encoding', 'reason', 'cookies', 'elapsed', 'request']
@@ -194,7 +196,10 @@ def getData(currency, y_path, year):
                     print(f'\rskipped sequence {file_sequence} in {currency}_{year} last response data not as expected or not present')
 
             else:
-                print(f'\rskipped sequence {file_sequence} in {currency}_{year} last response not 200, instead:{result.response_code}')
+                try_count = try_count+1
+                if try_count > max_tries:
+                    print(f'\r too many bad calls, trying next frame in {currency}_{year} last response code:{result.response_code}')
+                    
          
             dt = (datetime.now()-last_call_rate_limiter).total_seconds()
             if  dt < timeToSleep:
@@ -224,7 +229,7 @@ def getData(currency, y_path, year):
             break
         #shouldnt be reachable but yaknow
         elif e > now_utc or s > now_utc:
-            break
+            breakpoint
             
     return True
 
