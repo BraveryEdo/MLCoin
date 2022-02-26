@@ -30,6 +30,7 @@
     <Compile Include="MLCoin.py" />
     <Compile Include="config.py" />
     <Compile Include="hackernewsScraper.py" />
+    <Compile Include="interface.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="environment.yml" />

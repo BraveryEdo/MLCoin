@@ -337,6 +337,3 @@ def getMultRes():
         else:
             populateRootPath(path)
     return True
-
-def updateData():
-    return True
