@@ -8,13 +8,13 @@ csv_path = config.csv_path
 
 '''
 csv data structure:
-workspace:
-root level: [csv_data_{RESOLUTION}_res]:
-    currency folder [BTC-USD]:
-        full summry file *if generated*: FULL_[BTC-USD]_{RESOLUTION}.csv
-        year folder [2020]:
-            data: [BTC-USD]_{YEAR}_{sequence}.csv
-            yearly data summary file *if generated*: {YEAR}_[BTC-USD]_{RESOLUTION}.csv
+root: .\csv_data\\
+root level: csv_data\\{RESOLUTION:1min}_res:
+    currency folder {CURRENCY:BTC-USD}:
+        full summry file *if generated*: FULL_{BTC-USD}_{RESOLUTION}.csv
+        year folder {YEAR:2020}:
+            data: {BTC-USD}_{YEAR}_{sequence}.csv
+            yearly data summary file *if generated*: {YEAR}_{BTC-USD}_{RESOLUTION}.csv
 '''
 '''
 #deprecated cuz its now included in get historical data
@@ -77,7 +77,7 @@ def setIndex():
 
 def merger():
     for t in time_lens:
-        path = f'{csv_path}_{t}_res'
+        path = f'{csv_path}\\{t}_res'
         print(path)
         if os.path.isdir(path):
             if not os.listdir(path) == []:

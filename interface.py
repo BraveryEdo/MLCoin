@@ -1,8 +1,11 @@
 from tkinter import *
-import tkinter
 import historical
 import mergeData
 import sys
+import os
+import pandas
+from pandas import read_table
+import matplotlib.pyplot as plt
 import config
 
 window = Tk()
@@ -26,6 +29,8 @@ def process_trades():
 
 def show_trade_data():
 
+    
+
     display = Toplevel(window)
     display.title("Data Display")
     display.geometry('350x200')
@@ -41,6 +46,42 @@ def show_trade_data():
     res_drop = OptionMenu(display, selected_res, *res_opts)
     selected_res.set(str(res_opts[0]))
     res_drop.grid(column=1, row=0)
+
+
+    def show():
+        c = selected_coin 
+        r = selected_res
+        y = 0
+        '''
+        csv data structure:
+        root:.\csv_data
+        root level: csv_data\\{RESOLUTION:1min}_res:
+            currency folder {CURRENCY:BTC-USD}:
+                full summry file *if generated*: FULL_{BTC-USD}_{RESOLUTION}.csv
+                year folder {YEAR:2020}:
+                    data: {BTC-USD}_{YEAR}_{sequence}.csv
+                    yearly data summary file *if generated*: {YEAR}_{BTC-USD}_{RESOLUTION}.csv
+        '''
+        path = ''
+        if y == 0:
+            path = csv_path+ f'\\{r}_res\\{c}\\FULL_{c}_{r}.csv'
+        elif os.path.isdir(csv_path+ f'\\{r}_res\\{c}\\{y}'):
+            #check to see if year is available in data
+            path = csv_path+ f'\\{r}_res\\{c}\\{y}\\{y}_{c}_{r}.csv'
+        else:
+            print("year selection is causing problems")
+        
+        if os.path.exists(path):
+            df = pandas.read_csv(path)
+            df.plot(grid=True)
+            plt.show()
+        else:
+            print(f'cant read csv from {path}')
+        
+        
+    show_button = Button(display,text="show",command=show()).grid(column=2,row=0)
+    
+
     '''
     years = START_YEAR_BY_CURRENCY
     year_opts = {'ALL':'ALL'}.append(years)

@@ -33,8 +33,8 @@ result_available = threading.Event()
 
 '''
 csv data structure:
-root:
-root level: csv_data_{RESOLUTION:1min}_res:
+root: .\csv_data\\
+root level: csv_data\\{RESOLUTION:1min}_res:
     currency folder {CURRENCY:BTC-USD}:
         full summry file *if generated*: FULL_{BTC-USD}_{RESOLUTION}.csv
         year folder {YEAR:2020}:
@@ -240,11 +240,11 @@ def populateYearPath(currency, y_path, year):
         fileList = os.listdir(y_path)
     if fileList == []:
         if(getData(currency, y_path, year)):
-            print(f'\rfinished loading csv\'s for {currency} {year}')
+            print(f'\nfinished loading csv\'s for {currency} {year}')
     else:
-        print(f'{currency}, {year}, contains: {len(fileList)} files from previous run. attempting to continue')
+        print(f'\n{currency}, {year}, contains: {len(fileList)} files from previous run. attempting to continue')
         if(getData(currency, y_path, year)):
-            print(f'\rfinished loading csv\'s for {currency} {year}')
+            print(f'\nfinished loading csv\'s for {currency} {year}')
     return True
 
 def makeYearPaths(currency, c_path):
@@ -328,12 +328,13 @@ def getHistorical():
     return True
 
 def getMultRes():
-    for v in time_lens:
-        path = f'{csv_path}_{v}_res'
+    for t in time_lens:
+        path = f'{csv_path}\\{t}_res'
         global TIME_SCALE
-        TIME_SCALE = v
+        TIME_SCALE = t
         if os.path.isdir(path) == False:
             makeRootPath(path)
         else:
             populateRootPath(path)
+    print('finished all')
     return True
