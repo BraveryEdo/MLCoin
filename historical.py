@@ -336,5 +336,5 @@ def getMultRes():
             makeRootPath(path)
         else:
             populateRootPath(path)
-    print('finished all')
+    print('\n\nFINISHED ALL')
     return True

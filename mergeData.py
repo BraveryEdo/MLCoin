@@ -143,5 +143,5 @@ def merger():
                 print(f'no data present in {path}')
         else:
             print(f'{path} does not exist yet, get data first')
-    print('merge completed')
+    print('\n\nPost Processing Completed')
     return True

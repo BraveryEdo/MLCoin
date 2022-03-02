@@ -48,10 +48,10 @@ def show_trade_data():
     res_drop.grid(column=1, row=0)
 
 
-    def show():
-        c = selected_coin 
-        r = selected_res
-        y = 0
+    def show(c_var, r_var, y_var):
+        c = c_var.get()
+        r = r_var.get()
+        y = y_var
         '''
         csv data structure:
         root:.\csv_data
@@ -64,22 +64,23 @@ def show_trade_data():
         '''
         path = ''
         if y == 0:
-            path = csv_path+ f'\\{r}_res\\{c}\\FULL_{c}_{r}.csv'
-        elif os.path.isdir(csv_path+ f'\\{r}_res\\{c}\\{y}'):
+            path = csv_path+ '\\'+r+'_res\\'+c+'\\FULL_'+c+'_'+r+'.csv'
+        elif os.path.isdir(csv_path+'\\'+r+'_res\\'+c+'\\'+y):
+
             #check to see if year is available in data
             path = csv_path+ f'\\{r}_res\\{c}\\{y}\\{y}_{c}_{r}.csv'
         else:
             print("year selection is causing problems")
         
         if os.path.exists(path):
-            df = pandas.read_csv(path)
-            df.plot(grid=True)
+            df = pandas.read_csv(path, usecols=['UF_time','low','high', 'volume'])
+            df.plot(x='UF_time',xlabel='time', title=f'{c} in {r} resolution')
             plt.show()
         else:
             print(f'cant read csv from {path}')
         
         
-    show_button = Button(display,text="show",command=show()).grid(column=2,row=0)
+    show_button = Button(display,text="show",command=lambda: show(selected_coin, selected_res, 0)).grid(column=2,row=0)
     
 
     '''
