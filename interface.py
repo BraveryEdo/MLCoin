@@ -74,7 +74,7 @@ def show_trade_data():
         
         if os.path.exists(path):
             df = pandas.read_csv(path, usecols=['UF_time','low','high', 'volume'])
-            df.plot(x='UF_time',xlabel='time', title=f'{c} in {r} resolution')
+            df.plot(x='UF_time',xlabel='time', grid=True, title=f'{c} in {r} resolution')
             plt.show()
         else:
             print(f'cant read csv from {path}')
