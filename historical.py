@@ -234,17 +234,18 @@ def getData(currency, y_path, year):
     return True
 
 def populateYearPath(currency, y_path, year):
-    print(f'populateYearPath: {year} @ {y_path}')
+    print(f'\npopulateYearPath: {year} @ {y_path}')
     fileList = []
     if os.path.isdir(y_path):
         fileList = os.listdir(y_path)
     if fileList == []:
         if(getData(currency, y_path, year)):
-            print(f'\nfinished loading csv\'s for {currency} {year}')
+            print(f'finished loading csv\'s for {currency} {year}')
     else:
-        print(f'\n{currency}, {year}, contains: {len(fileList)} files from previous run. attempting to continue')
+        print(f'{currency}, {year}, contained: {len(fileList)} files from previous run. attempting to continue')
         if(getData(currency, y_path, year)):
-            print(f'\nfinished loading csv\'s for {currency} {year}')
+            print(f'finished loading csv\'s for {currency} {year}')
+        pass
     return True
 
 def makeYearPaths(currency, c_path):

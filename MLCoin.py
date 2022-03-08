@@ -8,8 +8,6 @@ try:
 except ImportError:
     pass
 '''
-import historical
-import mergeData
 import interface
 
 interface.main()

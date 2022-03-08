@@ -1,16 +1,17 @@
 from tkinter import *
-import historical
-import mergeData
 import sys
 import os
 import pandas
 from pandas import read_table
 import matplotlib.pyplot as plt
 import config
+import historical
+import mergeData
+import learn
 
 window = Tk()
 window.title("MLCoin")
-window.geometry('350x200')
+window.geometry('350x500')
 headerArray ={}
 buttonArray ={}
 
@@ -47,6 +48,15 @@ def show_trade_data():
     selected_res.set(str(res_opts[0]))
     res_drop.grid(column=1, row=0)
 
+    learn_button = Button(display, text="learn", command= lambda: ML(selected_coin, selected_res, 0)).grid(column=2,row=0)    
+    show_button = Button(display,text="show",command=lambda: show(selected_coin, selected_res, 0)).grid(column=3,row=0)
+
+    def ML(c_var, r_var, y_var):
+        print('learning...')
+        learn.run(c_var,r_var,y_var)
+        show_button.text=tk.StringVar("Magic")
+        return True
+
 
     def show(c_var, r_var, y_var):
         c = c_var.get()
@@ -74,13 +84,13 @@ def show_trade_data():
         
         if os.path.exists(path):
             df = pandas.read_csv(path, usecols=['UF_time','low','high', 'volume'])
-            df.plot(x='UF_time',xlabel='time', grid=True, title=f'{c} in {r} resolution')
+            df.plot(x='UF_time',xlabel='time', grid=True, title=f'{c} in {r} resolution', figsize = (12, 5))
+            plt.xticks(rotation = 30, fontsize = 'xx-small')
             plt.show()
         else:
             print(f'cant read csv from {path}')
         
-        
-    show_button = Button(display,text="show",command=lambda: show(selected_coin, selected_res, 0)).grid(column=2,row=0)
+  
     
 
     '''
@@ -111,11 +121,11 @@ def exit():
 #organized this way to make addinf functionality super simple
 #layout for each new section/button defined programatically and they should all look the same
 #header Text for each section
-hText=["Aquire Data", "Process Data", "Show Data", ""]
+hText=["Aquire Data", "Process Data", "Show Data",""]
 #buttons grouped by section
 bText=[["DL Trade Data"], ["Process Trades"], ["Trade Data"], ["Exit"]]
 #functions for each button
-bFunc=[[get_multi_res_historical],[process_trades],[show_trade_data],[exit]]
+bFunc=[[get_multi_res_historical],[process_trades],[show_trade_data], [exit]]
 
 def main():
     rPos = 0

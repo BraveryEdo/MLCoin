@@ -7,6 +7,7 @@ time_lens = {'15min':900, '1hr':3600, '6hr':21600, '1day':86400}
 #time_lens = {'1min':60, '5min':300, '15min':900, '1hr':3600, '6hr':21600, '1day':86400}
 max_tries = 20
 csv_zero_pad_for_sequence = 7
+#CCapikey = '36119e1d8af1dde620245f82d3511c26099c756ed6779116e832934b1b77c17a'
 
 '''
 csv data structure:
