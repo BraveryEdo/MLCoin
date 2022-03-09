@@ -74,6 +74,9 @@ def setIndex():
                                             df.sort_index(inplace=True)
                                             df.to_csv(f_path)
 '''
+def expand_date():
+    return True
+
 
 def merger():
     for t in time_lens:

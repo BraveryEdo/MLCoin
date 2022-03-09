@@ -26,12 +26,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="historical.py" />
+    <Compile Include="learn.py" />
     <Compile Include="mergeData.py" />
     <Compile Include="MLCoin.py" />
     <Compile Include="config.py" />
     <Compile Include="hackernewsScraper.py" />
     <Compile Include="interface.py" />
-    <Compile Include="learn.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="environment.yml" />

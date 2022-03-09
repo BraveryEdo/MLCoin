@@ -54,7 +54,7 @@ def show_trade_data():
     def ML(c_var, r_var, y_var):
         print('learning...')
         learn.run(c_var,r_var,y_var)
-        show_button.text=tk.StringVar("Magic")
+        #show_button.text.set("Magic")
         return True
 
 

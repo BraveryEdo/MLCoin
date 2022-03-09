@@ -1,7 +1,10 @@
+import os
+from tkinter import XView
 import pandas
 import numpy as np
 import matplotlib.pyplot as plt
 import config
+import sklearn
 
 try:
     # [OPTIONAL] Seaborn makes plots nicer
@@ -20,7 +23,6 @@ def get_features_and_labels(frame):
     # Replace missing values with 0.0
     # or we can use scikit-learn to calculate missing values below
     #frame[frame.isnull()] = 0.0
-
     # Convert values to floats
     arr = np.array(frame, dtype=np.float)
 
@@ -29,7 +31,10 @@ def get_features_and_labels(frame):
     arr = MinMaxScaler().fit_transform(arr)
 
     # Use the last column as the target value
-    X, y = arr[:, :-1], arr[:, -1]
+    X, y = arr[:, 1:], arr[:, 0]
+
+    #print(f'training sets:\nX: {X[0]}, \ny:{y[0]}')
+
     # To use the first column instead, change the index value
     #X, y = arr[:, 1:], arr[:, 0]
     
@@ -80,6 +85,7 @@ def evaluate_learner(X_train, X_test, y_train, y_test):
     from sklearn.svm import SVR
 
     # Train using a radial basis function
+    print('radial basis function training has begun')
     svr = SVR(kernel='rbf', gamma=0.1)
     svr.fit(X_train, y_train)
     y_pred = svr.predict(X_test)
@@ -87,24 +93,26 @@ def evaluate_learner(X_train, X_test, y_train, y_test):
     yield 'RBF Model ($R^2={:.3f}$)'.format(r_2), y_test, y_pred
 
     # Train using a linear kernel
+    print('linear kernel training has begun')
     svr = SVR(kernel='linear')
     svr.fit(X_train, y_train)
     y_pred = svr.predict(X_test)
     r_2 = svr.score(X_test, y_test)
     yield 'Linear Model ($R^2={:.3f}$)'.format(r_2), y_test, y_pred
-
+    '''
     # Train using a polynomial kernel
-    svr = SVR(kernel='poly', degree=2)
+    print('polynomial kernel training has begun')
+    svr = SVR(kernel="poly", gamma="auto", degree=3, epsilon=0.1, coef0=1)
     svr.fit(X_train, y_train)
     y_pred = svr.predict(X_test)
     r_2 = svr.score(X_test, y_test)
     yield 'Polynomial Model ($R^2={:.3f}$)'.format(r_2), y_test, y_pred
-
+    '''
 
 # =====================================================================
 
 
-def plot(results):
+def plot(results, UF_time):
     '''
     Create a plot comparing multiple learners.
 
@@ -115,19 +123,20 @@ def plot(results):
     '''
 
     # Using subplots to display the results on the same X axis
-    fig, plts = plt.subplots(nrows=len(results), figsize=(8, 8))
-    fig.canvas.set_window_title('Predicting data from ' + URL)
+    fig, plts = plt.subplots(nrows=len(results), figsize=(12, 8))
+    
+    
+    #plt.xticks(range(len(UF_time)), UF_time, rotation = 30, fontsize = 'xx-small')
+    fig.canvas.set_window_title('Prediction data ...')
 
     # Show each element in the plots returned from plt.subplots()
     for subplot, (title, y, y_pred) in zip(plts, results):
         # Configure each subplot to have no tick marks
         # (these are meaningless for the sample dataset)
-        subplot.set_xticklabels(())
-        subplot.set_yticklabels(())
-
         # Label the vertical axis
         subplot.set_ylabel('stock price')
 
+        
         # Set the title for the subplot
         subplot.set_title(title)
 
@@ -157,6 +166,7 @@ def plot(results):
     # ==================================
     # Display the plot in interactive UI
     plt.show()
+
 
     # To save the plot to an image file, use savefig()
     #plt.savefig('plot.png')
@@ -204,7 +214,17 @@ def run(c_var, r_var, y_var):
         print("year selection is causing problems")
         
     if os.path.exists(path):
-        frame = pandas.read_csv(path, usecols=['UF_time','low','high', 'volume'])
+        frame = pandas.read_csv(path, usecols=['time','high', 'low', 'volume', 'UF_time'])
+        UFT = frame['UF_time']
+        frame['year'] = pandas.to_datetime(frame['time']).dt.year
+        frame['month'] = pandas.to_datetime(frame['time']).dt.month
+        frame['day'] = pandas.to_datetime(frame['time']).dt.day
+        frame['weekday'] = pandas.to_datetime(frame['time']).dt.weekday
+        frame['hour'] = pandas.to_datetime(frame['time']).dt.hour
+        frame['minute'] = pandas.to_datetime(frame['time']).dt.minute
+        #put high (prediction target) in the first spot
+        frame = frame[['high', 'time', 'volume', 'low', 'year', 'month', 'day', 'weekday', 'hour', 'minute']]
+        #frame = pandas.read_csv(path, usecols=['time','low','high', 'open', 'close', 'volume'])
         # Process data into feature and label arrays
         print("Processing {} samples with {} attributes".format(len(frame.index), len(frame.columns)))
         X_train, X_test, y_train, y_test = get_features_and_labels(frame)
@@ -215,8 +235,9 @@ def run(c_var, r_var, y_var):
 
         # Display the results
         print("Plotting the results")
-        plot(results)
+        plot(results, UFT)
     else:
         print(f'cant read csv from {path}')
 
     
+
